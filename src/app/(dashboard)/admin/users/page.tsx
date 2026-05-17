@@ -1,15 +1,26 @@
 export const dynamic = "force-dynamic";
+import { redirect } from "next/navigation";
 import { Role } from "@prisma/client";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { DbUnavailable } from "@/components/common/DbUnavailable";
+import { UserManagement } from "@/components/admin/UserManagement";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminUsersPage() {
-  let users: Awaited<ReturnType<typeof prisma.user.findMany>> = [];
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  const userRole = session.user.role as Role;
+  if (![Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR].includes(userRole)) redirect("/");
+
+  let users: { id: string; email: string; username: string; role: Role; isActive: boolean; totpEnabled: boolean; lastLoginAt: Date | null }[] = [];
   let dbAvailable = true;
 
   try {
-    users = await prisma.user.findMany({ orderBy: { createdAt: "desc" } });
+    users = await prisma.user.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, email: true, username: true, role: true, isActive: true, totpEnabled: true, lastLoginAt: true }
+    });
   } catch {
     dbAvailable = false;
   }
@@ -20,19 +31,11 @@ export default async function AdminUsersPage() {
       {!dbAvailable ? (
         <DbUnavailable page="Users" />
       ) : (
-        <>
-          <div className="glass-card overflow-hidden p-0">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-white/[0.04] text-white/45"><tr><th className="p-4">User</th><th>Role</th><th>2FA</th><th>Last login</th><th>Status</th></tr></thead>
-              <tbody className="divide-y divide-white/10">
-                {users.map((user) => (
-                  <tr key={user.id}><td className="p-4"><p className="font-semibold">{user.username}</p><p className="text-white/45">{user.email}</p></td><td>{user.role}</td><td>{user.totpEnabled ? "Enabled" : "Disabled"}</td><td>{user.lastLoginAt?.toLocaleString() ?? "Never"}</td><td>{user.isActive ? "Active" : "Suspended"}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-4 text-sm text-white/45">Available roles: {Object.values(Role).join(", ")}</p>
-        </>
+        <UserManagement
+          initialUsers={users.map((u) => ({ ...u, lastLoginAt: u.lastLoginAt?.toISOString() ?? null }))}
+          currentUserId={session.user.id}
+          currentUserRole={userRole}
+        />
       )}
     </>
   );

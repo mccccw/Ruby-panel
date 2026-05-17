@@ -1,35 +1,44 @@
 export const dynamic = "force-dynamic";
+import { redirect } from "next/navigation";
+import { Role } from "@prisma/client";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { GlassCard } from "@/components/common/GlassCard";
 import { DbUnavailable } from "@/components/common/DbUnavailable";
+import { ApiKeyManager } from "@/components/admin/ApiKeyManager";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export default async function AdminApiKeysPage() {
-  let settings: Awaited<ReturnType<typeof prisma.panelSetting.findMany>> = [];
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  const userRole = session.user.role as Role;
+  if (![Role.SUPERADMIN, Role.ADMIN].includes(userRole)) redirect("/");
+
+  let keys: { id: string; name: string; keyPrefix: string; lastUsedAt: Date | null; expiresAt: Date | null; createdAt: Date; user: { username: string; email: string } }[] = [];
   let dbAvailable = true;
 
   try {
-    settings = await prisma.panelSetting.findMany({ orderBy: { key: "asc" } });
+    keys = await prisma.apiKey.findMany({
+      orderBy: { createdAt: "desc" },
+      include: { user: { select: { username: true, email: true } } }
+    });
   } catch {
     dbAvailable = false;
   }
 
   return (
     <>
-      <PageHeader eyebrow="Admin" title="API keys" description="Create and revoke hashed API keys for external integrations." />
+      <PageHeader eyebrow="Admin" title="API Keys" description="Create and revoke hashed API keys for external integrations." />
       {!dbAvailable ? (
         <DbUnavailable page="API keys" />
       ) : (
-        <GlassCard>
-          <div className="grid gap-3">
-            {settings.map((setting) => (
-              <div key={setting.id} className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm">
-                <span className="font-mono text-ruby-200">{setting.key}</span>
-                <span className="text-white/60">{setting.value}</span>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
+        <ApiKeyManager
+          initialKeys={keys.map((k) => ({
+            ...k,
+            lastUsedAt: k.lastUsedAt?.toISOString() ?? null,
+            expiresAt: k.expiresAt?.toISOString() ?? null,
+            createdAt: k.createdAt.toISOString()
+          }))}
+        />
       )}
     </>
   );

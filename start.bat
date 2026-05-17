@@ -144,17 +144,16 @@ echo [WARN] PostgreSQL Service nicht gefunden oder konnte nicht gestartet werden
 :postgres_ok
 
 REM ─── .env Datei ──────────────────────────────────────────
-if not exist ".env" (
-    if exist ".env.local" (
-        echo DATABASE_URL=postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5^&pool_timeout=5 > .env
-        echo DIRECT_URL=postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5^&pool_timeout=5 >> .env
-        echo [OK] .env Datei erstellt
-    ) else if exist ".env.example" (
+if not exist ".env.local" (
+    if exist ".env.example" (
         copy .env.example .env.local >nul
-        echo DATABASE_URL=postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5^&pool_timeout=5 > .env
-        echo DIRECT_URL=postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5^&pool_timeout=5 >> .env
-        echo [OK] .env aus .env.example erstellt
+        echo [OK] .env.local aus .env.example erstellt - bitte anpassen!
     )
+)
+if not exist ".env" (
+    echo DATABASE_URL=postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5^&pool_timeout=5 > .env
+    echo DIRECT_URL=postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5^&pool_timeout=5 >> .env
+    echo [OK] .env Datei erstellt
 ) else (
     echo [OK] .env Datei vorhanden
 )
@@ -173,9 +172,18 @@ if not exist "node_modules" (
     echo [OK] node_modules vorhanden
 )
 
+REM ─── Prisma Generate ────────────────────────────────────
+echo [INFO] Prisma Client generieren...
+npx prisma generate >nul 2>&1
+if %errorlevel% equ 0 (
+    echo [OK] Prisma Client generiert
+) else (
+    echo [WARN] Prisma generate fehlgeschlagen
+)
+
 REM ─── Prisma DB Push ──────────────────────────────────────
 echo [INFO] Prisma Schema synchronisieren...
-npx prisma db push --skip-generate >nul 2>&1
+npx prisma db push >nul 2>&1
 if %errorlevel% equ 0 (
     echo [OK] Datenbank Schema aktuell
 ) else (
@@ -183,7 +191,7 @@ if %errorlevel% equ 0 (
 )
 
 REM ─── Prisma Seed ─────────────────────────────────────────
-node -e "const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.user.count().then(n=>{if(n===0){process.exit(1)}else{process.exit(0)}}).catch(()=>process.exit(0))" >nul 2>&1
+node --input-type=module -e "import {PrismaClient} from '@prisma/client';const p=new PrismaClient();p.user.count().then(n=>{if(n===0){process.exit(1)}else{process.exit(0)}}).catch(()=>process.exit(0))" >nul 2>&1
 if %errorlevel% equ 1 (
     echo [INFO] Kein Admin gefunden - Seed wird ausgeführt...
     npm run prisma:seed

@@ -1,6 +1,5 @@
 "use client";
 
-import { nanoid } from "nanoid";
 import { Send } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -19,8 +18,8 @@ export function AiAssistant({ serverId }: { serverId: string }) {
     if (!text || stream.streaming) {
       return;
     }
-    const userMessage = { id: nanoid(), serverId, role: "user" as const, content: text, createdAt: new Date().toISOString() };
-    const assistantId = nanoid();
+    const userMessage = { id: crypto.randomUUID(), serverId, role: "user" as const, content: text, createdAt: new Date().toISOString() };
+    const assistantId = crypto.randomUUID();
     addMessage(userMessage);
     addMessage({ id: assistantId, serverId, role: "assistant", content: "", createdAt: new Date().toISOString() });
     setInput("");

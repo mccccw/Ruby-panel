@@ -4,6 +4,7 @@ import { z } from "zod";
 import { fail, guarded, ok } from "@/lib/api";
 import { auditLog } from "@/lib/audit";
 import { requireUser } from "@/lib/auth";
+import { createServerContainer } from "@/lib/docker";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils";
 
@@ -16,7 +17,10 @@ const createSchema = z.object({
   cpuPercent: z.number().min(10).max(800),
   diskGb: z.number().min(1).max(2048),
   port: z.number().int().min(1).max(65535).optional(),
-  jvmFlags: z.array(z.string()).default([])
+  jvmFlags: z.array(z.string()).default([]),
+  autoBackup: z.boolean().default(false),
+  backupSchedule: z.string().optional(),
+  backupRetention: z.number().int().min(1).max(100).default(7)
 });
 
 async function allocatePort(preferred?: number): Promise<number> {
@@ -85,6 +89,9 @@ export async function POST(request: Request) {
         diskGb: input.diskGb,
         dataPath: path.resolve(dataRoot, idSeed),
         jvmFlags: input.jvmFlags,
+        autoBackup: input.autoBackup,
+        backupSchedule: input.backupSchedule ?? null,
+        backupRetention: input.backupRetention,
         env: {} as Prisma.InputJsonObject,
         users: {
           create: {
@@ -94,6 +101,20 @@ export async function POST(request: Request) {
         }
       };
     const server = await prisma.server.create({ data });
+    try {
+      await createServerContainer(server.id);
+    } catch (containerError) {
+      const isInfraError =
+        containerError instanceof Error &&
+        (containerError.message.includes("ENOENT") ||
+          containerError.message.includes("ECONNREFUSED") ||
+          containerError.message.includes("EACCES") ||
+          containerError.message.includes("socket") ||
+          containerError.message.includes("docker"));
+      if (!isInfraError) {
+        throw containerError;
+      }
+    }
     await auditLog({ userId: user.id, action: "server.create", targetType: "Server", targetId: server.id, metadata: { port, type: input.type } });
     return ok({ id: server.id }, { status: 201 });
   } catch (error) {

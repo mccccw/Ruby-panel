@@ -1,0 +1,17 @@
+{
+  "name": "Ruby Panel",
+  "short_name": "Ruby",
+  "description": "Control Beyond Limits",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#E11D48",
+  "background_color": "#080809",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "128x128",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

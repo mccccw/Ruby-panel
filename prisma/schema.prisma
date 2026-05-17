@@ -1,0 +1,424 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                 String                   @id @default(cuid())
+  email              String                   @unique
+  username           String                   @unique
+  passwordHash       String
+  role               Role                     @default(USER)
+  avatarUrl          String?
+  totpSecret         String?
+  totpEnabled        Boolean                  @default(false)
+  isActive           Boolean                  @default(true)
+  lastLoginAt        DateTime?
+  lastLoginIp        String?
+  passwordChangedAt  DateTime                 @default(now())
+  servers            ServerUser[]
+  websites           WebsiteUser[]
+  sessions           UserSession[]
+  apiKeys            ApiKey[]
+  auditLogs          AuditLog[]
+  notifications      NotificationPreference[]
+  recoveryCodes      RecoveryCode[]
+  passwordResetTokens PasswordResetToken[]
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  @@index([email])
+  @@index([username])
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  MODERATOR
+  USER
+}
+
+model UserSession {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token        String   @unique
+  refreshToken String   @unique
+  expiresAt    DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model RecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String    @unique
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  keyHash     String    @unique
+  keyPrefix   String
+  permissions Json
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([keyHash])
+}
+
+model Server {
+  id              String               @id @default(cuid())
+  name            String
+  description     String?
+  iconUrl         String?
+  type            ServerType
+  version         String
+  build           String?
+  containerId     String?              @unique
+  containerName   String               @unique
+  status          ServerStatus         @default(STOPPED)
+  port            Int                  @unique
+  queryPort       Int?
+  rconPort        Int?
+  rconPassword    String?
+  ramMb           Int                  @default(2048)
+  cpuPercent      Float                @default(100)
+  diskGb          Float                @default(20)
+  dataPath        String               @unique
+  jvmFlags        String[]             @default([])
+  startupScript   String?
+  env             Json                 @default("{}")
+  autoBackup      Boolean              @default(false)
+  backupSchedule  String?
+  backupRetention Int                  @default(7)
+  users           ServerUser[]
+  backups         Backup[]
+  tasks           ScheduledTask[]
+  snapshots       WorldSnapshot[]
+  stats           ServerStatSnapshot[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  @@index([status])
+  @@index([type])
+}
+
+enum ServerType {
+  VANILLA
+  PAPER
+  PURPUR
+  SPIGOT
+  FABRIC
+  FORGE
+  NEOFORGE
+  QUILT
+  BEDROCK
+  VELOCITY
+  WATERFALL
+  BUNGEECORD
+  CUSTOM
+}
+
+enum ServerStatus {
+  CREATING
+  STARTING
+  RUNNING
+  STOPPING
+  STOPPED
+  CRASHED
+  ERROR
+}
+
+model ServerUser {
+  id          String             @id @default(cuid())
+  serverId    String
+  server      Server             @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions ServerPermission[]
+  createdAt   DateTime           @default(now())
+
+  @@unique([serverId, userId])
+}
+
+enum ServerPermission {
+  VIEW
+  CONSOLE
+  FILES_READ
+  FILES_WRITE
+  PLUGINS
+  BACKUPS
+  TASKS
+  MONITORING
+  SETTINGS
+  MANAGE
+}
+
+model Backup {
+  id          String       @id @default(cuid())
+  serverId    String
+  server      Server       @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  name        String
+  type        BackupType   @default(MANUAL)
+  sizeMb      Float?
+  filePath    String?
+  checksum    String?
+  status      BackupStatus @default(PENDING)
+  errorMsg    String?
+  createdAt   DateTime     @default(now())
+  completedAt DateTime?
+
+  @@index([serverId])
+}
+
+enum BackupType {
+  MANUAL
+  SCHEDULED
+}
+
+enum BackupStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model ScheduledTask {
+  id        String   @id @default(cuid())
+  serverId  String
+  server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  name      String
+  type      TaskType
+  schedule  String
+  payload   Json
+  isEnabled Boolean  @default(true)
+  lastRun   DateTime?
+  nextRun   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([serverId])
+}
+
+enum TaskType {
+  RESTART
+  BACKUP
+  COMMAND
+  ANNOUNCE
+  START
+  STOP
+}
+
+model WorldSnapshot {
+  id        String   @id @default(cuid())
+  serverId  String
+  server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  worldName String
+  filePath  String
+  sizeMb    Float
+  createdAt DateTime @default(now())
+
+  @@index([serverId])
+}
+
+model ServerStatSnapshot {
+  id          String   @id @default(cuid())
+  serverId    String
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  cpuPercent  Float
+  ramMb       Float
+  playerCount Int
+  tps         Float?
+  entities    Int?
+  chunks      Int?
+  netRxKb     Float?
+  netTxKb     Float?
+  timestamp   DateTime @default(now())
+
+  @@index([serverId, timestamp])
+}
+
+model Website {
+  id           String         @id @default(cuid())
+  name         String
+  type         SiteType
+  containerId  String?        @unique
+  status       SiteStatus     @default(STOPPED)
+  dataPath     String         @unique
+  buildCommand String?
+  startCommand String?
+  outputDir    String?
+  port         Int            @unique
+  users        WebsiteUser[]
+  domains      Domain[]
+  envVars      EnvVariable[]
+  databases    SiteDatabase[]
+  deployments  Deployment[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([status])
+  @@index([type])
+}
+
+enum SiteType {
+  STATIC
+  NODEJS
+  PHP
+}
+
+enum SiteStatus {
+  STOPPED
+  RUNNING
+  BUILDING
+  ERROR
+}
+
+model WebsiteUser {
+  id        String  @id @default(cuid())
+  websiteId String
+  website   Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String  @default("viewer")
+
+  @@unique([websiteId, userId])
+}
+
+model Domain {
+  id         String   @id @default(cuid())
+  websiteId  String
+  website    Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  domain     String   @unique
+  sslEnabled Boolean  @default(false)
+  sslExpiry  DateTime?
+  verified   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([websiteId])
+}
+
+model EnvVariable {
+  id        String  @id @default(cuid())
+  websiteId String
+  website   Website @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  key       String
+  value     String
+  isSecret  Boolean @default(false)
+
+  @@unique([websiteId, key])
+}
+
+model SiteDatabase {
+  id        String   @id @default(cuid())
+  websiteId String
+  website   Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  name      String   @unique
+  username  String   @unique
+  password  String
+  engine    DBEngine @default(POSTGRES)
+  sizeMb    Float?
+  createdAt DateTime @default(now())
+}
+
+enum DBEngine {
+  POSTGRES
+  MYSQL
+}
+
+model Deployment {
+  id          String           @id @default(cuid())
+  websiteId   String
+  website     Website          @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  commitHash  String?
+  branch      String?
+  status      DeploymentStatus @default(PENDING)
+  logs        String?
+  triggeredBy String?
+  createdAt   DateTime         @default(now())
+  completedAt DateTime?
+
+  @@index([websiteId])
+}
+
+enum DeploymentStatus {
+  PENDING
+  BUILDING
+  DEPLOYING
+  SUCCESS
+  FAILED
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model NotificationPreference {
+  id        String         @id @default(cuid())
+  userId    String
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channel   NotificationCh
+  target    String
+  events    String[]
+  isEnabled Boolean        @default(true)
+  createdAt DateTime       @default(now())
+
+  @@index([userId])
+}
+
+enum NotificationCh {
+  DISCORD
+  TELEGRAM
+  EMAIL
+}
+
+model PanelSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}

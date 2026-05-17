@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+:root {
+  --ruby-50: #fff1f2;
+  --ruby-100: #ffe4e6;
+  --ruby-200: #fecdd3;
+  --ruby-400: #fb7185;
+  --ruby-500: #f43f5e;
+  --ruby-600: #e11d48;
+  --ruby-700: #be123c;
+  --ruby-900: #881337;
+  --surface-0: #080809;
+  --surface-1: #0d0d0f;
+  --surface-2: #111114;
+  --surface-3: #18181c;
+  --surface-4: #1e1e23;
+  --surface-5: #26262e;
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text-primary: rgba(255, 255, 255, 0.95);
+  --text-secondary: rgba(255, 255, 255, 0.6);
+  --text-tertiary: rgba(255, 255, 255, 0.35);
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  color-scheme: dark;
+  background: var(--surface-0);
+}
+
+body {
+  min-height: 100%;
+  margin: 0;
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at 15% 10%, rgba(225, 29, 72, 0.2), transparent 34rem),
+    radial-gradient(circle at 85% 0%, rgba(251, 113, 133, 0.12), transparent 30rem),
+    linear-gradient(180deg, var(--surface-0), var(--surface-1));
+  font-family: var(--font-geist), Geist, ui-sans-serif, system-ui, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(225, 29, 72, 0.35);
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  box-shadow:
+    0 0 0 1px rgba(225, 29, 72, 0.05),
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.ruby-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 38px 38px;
+  mask-image: radial-gradient(circle at center, black, transparent 72%);
+}
+
+.focus-ruby:focus-visible {
+  outline: 2px solid var(--ruby-600);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.001ms !important;
+  }
+}

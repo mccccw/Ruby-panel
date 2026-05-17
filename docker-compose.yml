@@ -1,0 +1,71 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ruby-panel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ruby
+      POSTGRES_PASSWORD: ruby_secret
+      POSTGRES_DB: rubypanel
+    ports:
+      - "0.0.0.0:5432:5432"
+    volumes:
+      - ruby-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ruby -d rubypanel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ruby-panel-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "0.0.0.0:6379:6379"
+    volumes:
+      - ruby-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ruby-panel
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://ruby:ruby_secret@postgres:5432/rubypanel
+      DIRECT_URL: postgresql://ruby:ruby_secret@postgres:5432/rubypanel
+      REDIS_URL: redis://redis:6379
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: change-me-with-openssl-rand-base64-32
+      JWT_SECRET: change-me-with-a-second-random-secret
+      SERVER_DATA_ROOT: /opt/ruby-panel/servers
+      WEBSITE_DATA_ROOT: /opt/ruby-panel/websites
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:3001
+    ports:
+      - "0.0.0.0:3000:3000"
+      - "0.0.0.0:3001:3001"
+      - "0.0.0.0:25565-25665:25565-25665"
+      - "0.0.0.0:8100-8200:8100-8200"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ruby-server-data:/opt/ruby-panel/servers
+      - ruby-website-data:/opt/ruby-panel/websites
+    command: sh -c "npx prisma migrate deploy && npm run start & npm run dev:socket"
+
+volumes:
+  ruby-postgres:
+  ruby-redis:
+  ruby-server-data:
+  ruby-website-data:

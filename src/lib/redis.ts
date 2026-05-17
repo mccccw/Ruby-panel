@@ -4,11 +4,14 @@ const globalForRedis = globalThis as unknown as { redis?: Redis };
 
 export function getRedis(): Redis {
   if (!globalForRedis.redis) {
-    globalForRedis.redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
-      maxRetriesPerRequest: 2,
+    const client = new Redis(process.env.REDIS_URL ?? "redis://localhost:6379", {
+      maxRetriesPerRequest: 1,
       lazyConnect: true,
-      enableReadyCheck: true
+      enableReadyCheck: false,
+      retryStrategy: () => null
     });
+    client.on("error", () => {});
+    globalForRedis.redis = client;
   }
   return globalForRedis.redis;
 }
@@ -49,9 +52,13 @@ export async function rateLimit(key: string, limit: number, windowSeconds: numbe
 }
 
 export async function publishJson(channel: string, payload: unknown): Promise<void> {
-  const redis = getRedis();
-  if (redis.status === "wait") {
-    await redis.connect();
+  try {
+    const redis = getRedis();
+    if (redis.status === "wait") {
+      await redis.connect();
+    }
+    await redis.publish(channel, JSON.stringify(payload));
+  } catch {
+    // Redis unavailable — skip publish
   }
-  await redis.publish(channel, JSON.stringify(payload));
 }

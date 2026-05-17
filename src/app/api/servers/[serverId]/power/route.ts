@@ -22,6 +22,11 @@ export async function POST(request: Request, context: { params: Promise<{ server
     await auditLog({ userId: user.id, action: `server.${action}`, targetType: "Server", targetId: serverId });
     return ok({ action });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    const isDockerError = msg.includes("ENOENT") || msg.includes("ECONNREFUSED") || msg.includes("socket") || msg.includes("Docker") || msg.includes("docker");
+    if (isDockerError) {
+      return fail(new Error("Docker is not running or not installed. Start Docker and try again."));
+    }
     return fail(error);
   }
 }

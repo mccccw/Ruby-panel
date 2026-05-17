@@ -7,7 +7,6 @@ import { getRedis } from "@/lib/redis";
 import { config } from "dotenv";
 import { resolve } from "path";
 
-// Load environment variables from .env.local
 config({ path: resolve(process.cwd(), ".env.local") });
 
 type ClientToServerEvents = {
@@ -19,6 +18,7 @@ type ClientToServerEvents = {
 type ServerToClientEvents = {
   "console:history": (lines: string[]) => void;
   "console:line": (line: string) => void;
+  "server:status": (data: { serverId: string; status: string }) => void;
   "stats:update": (payload: { cpuPercent: number; ramMb: number; ramLimitMb: number; playerCount: number; tps: number | null; netRxKb: number; netTxKb: number }) => void;
 };
 
@@ -39,13 +39,28 @@ io.use((socket, next) => {
   next(new Error("Missing socket auth token"));
 });
 
+async function safeRedisConnect() {
+  try {
+    const redis = getRedis();
+    if (redis.status === "wait") await redis.connect();
+    return redis;
+  } catch {
+    return null;
+  }
+}
+
 io.on("connection", (socket) => {
   socket.on("console:join", async (serverId) => {
     await socket.join(`server:${serverId}:console`);
-    const redis = getRedis();
-    if (redis.status === "wait") await redis.connect();
-    const history = await redis.lrange(`console:${serverId}`, -1000, -1);
-    socket.emit("console:history", history);
+    try {
+      const redis = await safeRedisConnect();
+      if (redis) {
+        const history = await redis.lrange(`console:${serverId}`, -1000, -1);
+        socket.emit("console:history", history);
+      }
+    } catch {
+      // Redis unavailable, no history
+    }
   });
 
   socket.on("stats:join", async (serverId) => {
@@ -56,13 +71,23 @@ io.on("connection", (socket) => {
     try {
       const output = await execCommand(serverId, command);
       const line = output.trim() || `Command sent: ${command}`;
-      const redis = getRedis();
-      if (redis.status === "wait") await redis.connect();
-      await redis.rpush(`console:${serverId}`, line);
-      await redis.ltrim(`console:${serverId}`, -1000, -1);
+      try {
+        const redis = await safeRedisConnect();
+        if (redis) {
+          await redis.rpush(`console:${serverId}`, line);
+          await redis.ltrim(`console:${serverId}`, -1000, -1);
+        }
+      } catch {
+        // Redis unavailable, skip history save
+      }
       io.to(`server:${serverId}:console`).emit("console:line", line);
     } catch (error) {
-      io.to(`server:${serverId}:console`).emit("console:line", `Ruby socket error: ${error instanceof Error ? error.message : "command failed"}`);
+      const msg = error instanceof Error ? error.message : "command failed";
+      const isDockerErr = msg.includes("ENOENT") || msg.includes("socket") || msg.includes("docker");
+      io.to(`server:${serverId}:console`).emit(
+        "console:line",
+        isDockerErr ? `\x1b[31m[Panel] Docker not available: ${msg}\x1b[0m` : `\x1b[31m[Panel] Error: ${msg}\x1b[0m`
+      );
     }
   });
 });
@@ -90,12 +115,12 @@ setInterval(() => {
             playerCount: snapshot.playerCount,
             tps: snapshot.tps
           });
-        } catch (error) {
-          console.error(`Stats collection failed for ${server.id}`, error);
+        } catch {
+          // Docker or DB error for this server, skip
         }
       }
-    } catch (error) {
-      console.error("Socket interval database error:", error);
+    } catch {
+      // DB unavailable
     }
   })();
 }, 10_000);

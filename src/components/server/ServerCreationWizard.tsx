@@ -21,7 +21,7 @@ const schema = z.object({
   ramMb: z.coerce.number().min(512, "Minimum 512 MB").max(32768, "Maximum 32768 MB"),
   cpuPercent: z.coerce.number().min(10, "Minimum 10%").max(800, "Maximum 800%"),
   diskGb: z.coerce.number().min(1, "Minimum 1 GB").max(2048, "Maximum 2048 GB"),
-  port: z.coerce.number().int().min(1).max(65535).optional(),
+  port: z.preprocess((v) => (v === "" || v === undefined ? undefined : Number(v)), z.number().int().min(1).max(65535).optional()),
   acceptEula: z.literal(true, { message: "You must accept the Minecraft EULA to create a server" }),
   autoBackup: z.boolean().optional(),
   backupSchedule: z.string().optional(),

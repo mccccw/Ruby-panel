@@ -14,25 +14,33 @@ export default async function AdminUsersPage() {
   if (![Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR].includes(userRole)) redirect("/");
 
   let users: { id: string; email: string; username: string; role: Role; isActive: boolean; totpEnabled: boolean; lastLoginAt: Date | null }[] = [];
+  let serverRequests: { id: string; name: string; type: string; version: string; ramMb: number; cpuPercent: number; diskGb: number; status: string; adminNote: string | null; createdAt: Date; user: { username: string; email: string } }[] = [];
   let dbAvailable = true;
 
   try {
-    users = await prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      select: { id: true, email: true, username: true, role: true, isActive: true, totpEnabled: true, lastLoginAt: true }
-    });
+    [users, serverRequests] = await Promise.all([
+      prisma.user.findMany({
+        orderBy: { createdAt: "desc" },
+        select: { id: true, email: true, username: true, role: true, isActive: true, totpEnabled: true, lastLoginAt: true }
+      }),
+      prisma.serverRequest.findMany({
+        orderBy: { createdAt: "desc" },
+        include: { user: { select: { username: true, email: true } } }
+      })
+    ]);
   } catch {
     dbAvailable = false;
   }
 
   return (
     <>
-      <PageHeader eyebrow="Admin" title="Users" description="Manage roles, status, 2FA posture, and account lifecycle." />
+      <PageHeader eyebrow="Admin" title="Users" description="Manage roles, status, 2FA posture, account lifecycle, and server requests." />
       {!dbAvailable ? (
         <DbUnavailable page="Users" />
       ) : (
         <UserManagement
           initialUsers={users.map((u) => ({ ...u, lastLoginAt: u.lastLoginAt?.toISOString() ?? null }))}
+          initialServerRequests={serverRequests.map((r) => ({ ...r, createdAt: r.createdAt.toISOString() }))}
           currentUserId={session.user.id}
           currentUserRole={userRole}
         />

@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
+import { Plus, Send } from "lucide-react";
+import { Role } from "@prisma/client";
 import { ServerCard } from "@/components/dashboard/ServerCard";
 import { LoadingSpinner } from "@/components/common/LoadingSpinner";
 import { Button } from "@/components/ui/button";
@@ -19,20 +20,31 @@ async function fetchServers(): Promise<ServerSummary[]> {
   return payload.data;
 }
 
-export function ServerList() {
+type Props = { role: Role };
+
+export function ServerList({ role }: Props) {
   const [search, setSearch] = useState("");
   const servers = useQuery({ queryKey: ["servers"], queryFn: fetchServers, refetchInterval: 10_000 });
   const filtered = useMemo(
     () => (servers.data ?? []).filter((server) => `${server.name} ${server.type} ${server.version}`.toLowerCase().includes(search.toLowerCase())),
     [servers.data, search]
   );
+
+  const canCreateServer = role !== Role.USER;
+
   return (
     <div>
       <div className="mb-6 flex flex-col gap-3 md:flex-row">
         <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search by name, type, version..." />
-        <Button asChild>
-          <Link href="/servers/new"><Plus className="h-4 w-4" />New server</Link>
-        </Button>
+        {canCreateServer ? (
+          <Button asChild>
+            <Link href="/servers/new"><Plus className="h-4 w-4" />New server</Link>
+          </Button>
+        ) : (
+          <Button asChild variant="secondary">
+            <Link href="/servers/request"><Send className="h-4 w-4" />Request server</Link>
+          </Button>
+        )}
       </div>
       {servers.isLoading ? <LoadingSpinner label="Loading servers" /> : null}
       {servers.isError ? <p className="rounded-xl border border-ruby-500/30 bg-ruby-600/10 p-4 text-ruby-100">{servers.error.message}</p> : null}

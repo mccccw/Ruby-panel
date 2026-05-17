@@ -10,26 +10,39 @@ const DEFAULT_ADMIN_USERNAME = "cattech";
 
 async function ensureAdmin() {
   try {
-    const admin = await prisma.user.findUnique({
-      where: { email: DEFAULT_ADMIN_EMAIL }
-    });
-
+    const admin = await prisma.user.findUnique({ where: { email: DEFAULT_ADMIN_EMAIL } });
     if (!admin) {
       const passwordHash = await hash(DEFAULT_ADMIN_PASSWORD, 12);
       await prisma.user.create({
-        data: {
-          email: DEFAULT_ADMIN_EMAIL,
-          username: DEFAULT_ADMIN_USERNAME,
-          passwordHash,
-          role: Role.SUPERADMIN,
-          isActive: true
-        }
+        data: { email: DEFAULT_ADMIN_EMAIL, username: DEFAULT_ADMIN_USERNAME, passwordHash, role: Role.SUPERADMIN, isActive: true }
       });
-      console.log("Default admin user created successfully.");
     }
   } catch {
     // DB unavailable, skip silently
   }
+}
+
+const ROUTE_PERMISSIONS: { pattern: RegExp; roles: Role[] }[] = [
+  { pattern: /^\/admin\/settings/, roles: [Role.SUPERADMIN, Role.ADMIN] },
+  { pattern: /^\/admin\/api-keys/, roles: [Role.SUPERADMIN, Role.ADMIN] },
+  { pattern: /^\/admin\/users/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
+  { pattern: /^\/admin\/audit/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
+  { pattern: /^\/admin\/notifications/, roles: [Role.SUPERADMIN, Role.ADMIN] },
+  { pattern: /^\/servers\/new/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
+  { pattern: /^\/web-hosting\/new/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
+  { pattern: /^\/api\/admin\/settings/, roles: [Role.SUPERADMIN, Role.ADMIN] },
+  { pattern: /^\/api\/admin\/api-keys/, roles: [Role.SUPERADMIN, Role.ADMIN] },
+  { pattern: /^\/api\/admin\/users/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
+  { pattern: /^\/api\/admin\/audit/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
+];
+
+function isRouteAllowed(pathname: string, role: Role): boolean {
+  for (const { pattern, roles } of ROUTE_PERMISSIONS) {
+    if (pattern.test(pathname)) {
+      return roles.includes(role);
+    }
+  }
+  return true;
 }
 
 export async function middleware(request: NextRequest) {
@@ -57,7 +70,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname.startsWith("/login") || pathname.startsWith("/reset-password")) {
+  if (pathname.startsWith("/login") || pathname.startsWith("/reset-password") || pathname.startsWith("/signup")) {
     return NextResponse.next();
   }
 
@@ -84,7 +97,19 @@ export async function middleware(request: NextRequest) {
   void ensureAdmin();
 
   if (!session?.user) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
     return NextResponse.redirect(new URL(`/login?callbackUrl=${encodeURIComponent(pathname)}`, request.url));
+  }
+
+  const userRole = (session.user.role as Role) ?? Role.USER;
+
+  if (!isRouteAllowed(pathname, userRole)) {
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    }
+    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return NextResponse.next();

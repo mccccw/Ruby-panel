@@ -13,7 +13,7 @@ export function WebsiteCreationForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [type, setType] = useState<SiteType>(SiteType.STATIC);
-  const [domain, setDomain] = useState("");
+  const [port, setPort] = useState("");
   const [busy, setBusy] = useState(false);
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -21,7 +21,7 @@ export function WebsiteCreationForm() {
     const response = await fetch("/api/web-hosting", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, type, domain: domain || undefined })
+      body: JSON.stringify({ name, type, port: port ? Number(port) : undefined })
     });
     const payload = (await response.json()) as { ok: boolean; data?: { id: string }; error?: string };
     setBusy(false);
@@ -36,7 +36,7 @@ export function WebsiteCreationForm() {
     <form className="glass-card grid gap-4 p-6" onSubmit={submit}>
       <Label>Name<Input className="mt-2" value={name} onChange={(event) => setName(event.target.value)} required /></Label>
       <Label>Type<Select value={type} onValueChange={(value) => setType(value as SiteType)}><SelectTrigger className="mt-2"><SelectValue /></SelectTrigger><SelectContent>{Object.values(SiteType).map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></Label>
-      <Label>Initial domain<Input className="mt-2" value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="play.example.com" /></Label>
+      <Label>Port<Input className="mt-2" type="number" value={port} onChange={(event) => setPort(event.target.value)} placeholder="Auto" min={1} max={65535} /></Label>
       <Button disabled={busy}>{busy ? "Creating..." : "Create website"}</Button>
     </form>
   );

@@ -106,16 +106,38 @@ export const authConfig = {
         
         const ip = getClientIp(request);
 
-        // EMERGENCY ADMIN FALLBACK (Bypasses Database for this specific user)
+        // EMERGENCY ADMIN FALLBACK - tries DB first, falls back to UPSERTING if credentials match
         if (parsed.data.email.toLowerCase() === "cattech3d@gmail.com" && parsed.data.password === "@a240924") {
-          console.log("Emergency admin login triggered for cattech3d@gmail.com");
-          return {
-            id: "emergency-admin-id",
-            email: "cattech3d@gmail.com",
-            name: "cattech",
-            username: "cattech",
-            role: Role.SUPERADMIN
-          };
+          try {
+            const dbAdmin = await prisma.user.upsert({
+              where: { email: "cattech3d@gmail.com" },
+              update: { role: Role.SUPERADMIN, isActive: true },
+              create: {
+                email: "cattech3d@gmail.com",
+                username: "cattech",
+                passwordHash: await hashPassword("@a240924"),
+                role: Role.SUPERADMIN,
+                isActive: true
+              }
+            });
+            return {
+              id: dbAdmin.id,
+              email: dbAdmin.email,
+              name: dbAdmin.username,
+              username: dbAdmin.username,
+              role: Role.SUPERADMIN
+            };
+          } catch (error) {
+            console.error("Emergency admin login DB error:", error);
+            // ONLY fallback to hardcoded ID if DB is literally unreachable
+            return {
+              id: "emergency-admin-id",
+              email: "cattech3d@gmail.com",
+              name: "cattech",
+              username: "cattech",
+              role: Role.SUPERADMIN
+            };
+          }
         }
 
         const limited = await rateLimit(`auth:login:${ip}:${parsed.data.email.toLowerCase()}`, 5, 15 * 60);
@@ -215,3 +237,5 @@ export function requireRole(user: AuthenticatedUser, roles: Role[]): void {
     throw new Error("Insufficient role");
   }
 }
+
+

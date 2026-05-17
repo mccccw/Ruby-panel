@@ -3,6 +3,7 @@
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,6 +53,11 @@ export function LoginForm() {
           {error ? <p className="rounded-lg border border-ruby-500/30 bg-ruby-600/10 p-3 text-sm text-ruby-100">{error}</p> : null}
         </div>
         <Button className="mt-8 w-full" disabled={busy}>{busy ? "Checking..." : needsTotp ? "Verify and enter" : "Sign in"}</Button>
+        {!needsTotp && (
+          <p className="mt-6 text-center text-sm text-white/45">
+            Don't have an account? <Link href="/signup" className="text-ruby-400 hover:underline">Join Ruby</Link>
+          </p>
+        )}
       </form>
     </main>
   );

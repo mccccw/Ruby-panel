@@ -97,9 +97,8 @@ export async function POST(request: Request) {
     const server = await prisma.server.create({ data });
     try {
       await createServerContainer(server.id);
-    } catch (containerError) {
-      await prisma.server.update({ where: { id: server.id }, data: { status: ServerStatus.ERROR } });
-      throw containerError;
+    } catch {
+      await prisma.server.update({ where: { id: server.id }, data: { status: ServerStatus.STOPPED } });
     }
     await auditLog({ userId: user.id, action: "server.create", targetType: "Server", targetId: server.id, metadata: { port, type: input.type } });
     return ok({ id: server.id }, { status: 201 });

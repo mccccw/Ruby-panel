@@ -10,13 +10,14 @@ import { slugify } from "@/lib/utils";
 const schema = z.object({
   name: z.string().min(2).max(80),
   type: z.nativeEnum(SiteType),
-  domain: z.string().min(3).optional(),
+  port: z.coerce.number().int().min(1).max(65535).optional(),
   buildCommand: z.string().optional(),
   startCommand: z.string().optional(),
   outputDir: z.string().optional()
 });
 
-async function allocateWebPort(): Promise<number> {
+async function allocateWebPort(requested?: number): Promise<number> {
+  if (requested) return requested;
   const start = Number(process.env.WEB_PORT_RANGE_START ?? 8100);
   const end = Number(process.env.WEB_PORT_RANGE_END ?? 8200);
   const used = new Set((await prisma.website.findMany({ select: { port: true } })).map((site) => site.port));
@@ -50,9 +51,8 @@ export async function POST(request: Request) {
       buildCommand: body.buildCommand ?? null,
       startCommand: body.startCommand ?? null,
       outputDir: body.outputDir ?? null,
-      port: await allocateWebPort(),
-      users: { create: { user: { connect: { id: user.id } }, role: "owner" } },
-      ...(body.domain ? { domains: { create: { domain: body.domain } } } : {})
+      port: await allocateWebPort(body.port),
+      users: { create: { user: { connect: { id: user.id } }, role: "owner" } }
     };
     const site = await prisma.website.create({ data });
     await auditLog({ userId: user.id, action: "website.create", targetType: "Website", targetId: site.id, metadata: { type: body.type } as Prisma.InputJsonObject });

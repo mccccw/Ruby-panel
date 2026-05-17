@@ -28,6 +28,7 @@ model User {
   auditLogs          AuditLog[]
   notifications      NotificationPreference[]
   recoveryCodes      RecoveryCode[]
+  serverRequests     ServerRequest[]
   passwordResetTokens PasswordResetToken[]
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
@@ -421,4 +422,28 @@ model PanelSetting {
   key       String   @unique
   value     String
   updatedAt DateTime @updatedAt
+}
+
+model ServerRequest {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  type        ServerType
+  version     String
+  ramMb       Int
+  cpuPercent  Int
+  diskGb      Int
+  status      RequestStatus @default(PENDING)
+  adminNote   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }

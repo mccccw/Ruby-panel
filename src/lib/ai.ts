@@ -93,7 +93,7 @@ export async function streamOllamaChat(messages: ChatMessage[], serverId: string
   if (!apiKey) {
     throw new Error("OLLAMA_CLOUD_API_KEY is not configured. Add it to .env.local.");
   }
-  const model = process.env.OLLAMA_CLOUD_MODEL ?? "deepseek-v4-pro:cloud";
+  const model = process.env.OLLAMA_CLOUD_MODEL ?? "gpt-oss:120b-cloud";
   const baseUrl = process.env.OLLAMA_CLOUD_BASE_URL ?? "https://ollama.com/api/chat";
 
   const requestBody = {

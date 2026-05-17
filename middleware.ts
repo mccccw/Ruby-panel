@@ -1,49 +1,26 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { Role } from "@prisma/client";
-import { hash } from "bcryptjs";
 
-const DEFAULT_ADMIN_EMAIL = "cattech3d@gmail.com";
-const DEFAULT_ADMIN_PASSWORD = "@a240924";
-const DEFAULT_ADMIN_USERNAME = "cattech";
+type RoleString = "SUPERADMIN" | "ADMIN" | "MODERATOR" | "USER";
 
-async function ensureAdmin() {
-  try {
-    const admin = await prisma.user.findUnique({ where: { email: DEFAULT_ADMIN_EMAIL } });
-    if (!admin) {
-      const passwordHash = await hash(DEFAULT_ADMIN_PASSWORD, 12);
-      await prisma.user.create({
-        data: { email: DEFAULT_ADMIN_EMAIL, username: DEFAULT_ADMIN_USERNAME, passwordHash, role: Role.SUPERADMIN, isActive: true }
-      });
-    }
-    await prisma.server.updateMany({
-      where: { status: { in: ["CREATING", "STARTING", "STOPPING"] } },
-      data: { status: "STOPPED" }
-    });
-  } catch {
-    // DB unavailable, skip silently
-  }
-}
-
-const ROUTE_PERMISSIONS: { pattern: RegExp; roles: Role[] }[] = [
-  { pattern: /^\/admin\/settings/, roles: [Role.SUPERADMIN, Role.ADMIN] },
-  { pattern: /^\/admin\/api-keys/, roles: [Role.SUPERADMIN, Role.ADMIN] },
-  { pattern: /^\/admin\/users/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
-  { pattern: /^\/admin\/audit/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
-  { pattern: /^\/admin\/notifications/, roles: [Role.SUPERADMIN, Role.ADMIN] },
-  { pattern: /^\/servers\/new/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
-  { pattern: /^\/web-hosting\/new/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
-  { pattern: /^\/api\/admin\/settings/, roles: [Role.SUPERADMIN, Role.ADMIN] },
-  { pattern: /^\/api\/admin\/api-keys/, roles: [Role.SUPERADMIN, Role.ADMIN] },
-  { pattern: /^\/api\/admin\/users/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
-  { pattern: /^\/api\/admin\/audit/, roles: [Role.SUPERADMIN, Role.ADMIN, Role.MODERATOR] },
+const ROUTE_PERMISSIONS: { pattern: RegExp; roles: RoleString[] }[] = [
+  { pattern: /^\/admin\/settings/, roles: ["SUPERADMIN", "ADMIN"] },
+  { pattern: /^\/admin\/api-keys/, roles: ["SUPERADMIN", "ADMIN"] },
+  { pattern: /^\/admin\/users/, roles: ["SUPERADMIN", "ADMIN", "MODERATOR"] },
+  { pattern: /^\/admin\/audit/, roles: ["SUPERADMIN", "ADMIN", "MODERATOR"] },
+  { pattern: /^\/admin\/notifications/, roles: ["SUPERADMIN", "ADMIN"] },
+  { pattern: /^\/servers\/new/, roles: ["SUPERADMIN", "ADMIN", "MODERATOR"] },
+  { pattern: /^\/web-hosting\/new/, roles: ["SUPERADMIN", "ADMIN", "MODERATOR"] },
+  { pattern: /^\/api\/admin\/settings/, roles: ["SUPERADMIN", "ADMIN"] },
+  { pattern: /^\/api\/admin\/api-keys/, roles: ["SUPERADMIN", "ADMIN"] },
+  { pattern: /^\/api\/admin\/users/, roles: ["SUPERADMIN", "ADMIN", "MODERATOR"] },
+  { pattern: /^\/api\/admin\/audit/, roles: ["SUPERADMIN", "ADMIN", "MODERATOR"] },
 ];
 
-function isRouteAllowed(pathname: string, role: Role): boolean {
+function isRouteAllowed(pathname: string, role: string): boolean {
   for (const { pattern, roles } of ROUTE_PERMISSIONS) {
     if (pattern.test(pathname)) {
-      return roles.includes(role);
+      return roles.includes(role as RoleString);
     }
   }
   return true;
@@ -78,28 +55,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  let userCount = 0;
-  let dbAvailable = false;
-  try {
-    userCount = await prisma.user.count();
-    dbAvailable = true;
-  } catch {
-    dbAvailable = false;
-  }
-
-  if (!dbAvailable) {
-    if (!session?.user) {
-      return NextResponse.redirect(new URL("/setup", request.url));
-    }
-    return NextResponse.next();
-  }
-
-  if (userCount === 0) {
-    return NextResponse.redirect(new URL("/setup", request.url));
-  }
-
-  void ensureAdmin();
-
   if (!session?.user) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -107,7 +62,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(`/login?callbackUrl=${encodeURIComponent(pathname)}`, request.url));
   }
 
-  const userRole = (session.user.role as Role) ?? Role.USER;
+  const userRole = (session.user.role as string) ?? "USER";
 
   if (!isRouteAllowed(pathname, userRole)) {
     if (pathname.startsWith("/api/")) {

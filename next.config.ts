@@ -16,7 +16,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self' ws: wss: http://localhost:3001 https://ollama.com https://api.modrinth.com https://api.curseforge.com",
+      `connect-src 'self' ws: wss: ${process.env.NEXT_PUBLIC_SOCKET_URL ?? "http://localhost:3001"} https://ollama.com https://api.modrinth.com https://api.curseforge.com`,
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'"

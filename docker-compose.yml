@@ -62,7 +62,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ruby-server-data:/opt/ruby-panel/servers
       - ruby-website-data:/opt/ruby-panel/websites
-    command: sh -c "npx prisma migrate deploy && npm run start & npm run dev:socket"
+    command: sh -c "npx prisma migrate deploy && node server.js & npm run start:socket"
 
 volumes:
   ruby-postgres:

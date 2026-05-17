@@ -138,17 +138,21 @@ if command -v pg_isready &>/dev/null; then
 fi
 
 # ─── .env Datei ──────────────────────────────────────────
-if [ ! -f ".env" ]; then
-    if [ -f ".env.local" ]; then
-        echo 'DATABASE_URL="postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5&pool_timeout=5"' > .env
-        echo 'DIRECT_URL="postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5&pool_timeout=5"' >> .env
-        echo -e "${GREEN}[OK] .env Datei erstellt${NC}"
-    elif [ -f ".env.example" ]; then
+if [ ! -f ".env.local" ]; then
+    if [ -f ".env.example" ]; then
         cp .env.example .env.local
-        echo 'DATABASE_URL="postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5&pool_timeout=5"' > .env
-        echo 'DIRECT_URL="postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5&pool_timeout=5"' >> .env
-        echo -e "${GREEN}[OK] .env aus .env.example erstellt - bitte .env.local anpassen!${NC}"
+        # Set sensible defaults for local development
+        sed -i 's|NEXTAUTH_SECRET=.*|NEXTAUTH_SECRET="'"$(openssl rand -base64 32 2>/dev/null || echo 'dev-secret-change-me-in-production')"'"|' .env.local
+        sed -i 's|JWT_SECRET=.*|JWT_SECRET="'"$(openssl rand -base64 32 2>/dev/null || echo 'dev-jwt-secret-change-me')"'"|' .env.local
+        sed -i 's|ENCRYPTION_KEY=.*|ENCRYPTION_KEY="'"$(openssl rand -hex 16 2>/dev/null || echo 'dev-encryption-key-change!')"'"|' .env.local
+        sed -i 's|OLLAMA_CLOUD_API_KEY=.*|OLLAMA_CLOUD_API_KEY="replace-with-your-ollama-cloud-api-key"|' .env.local
+        echo -e "${GREEN}[OK] .env.local aus .env.example erstellt - bitte anpassen!${NC}"
     fi
+fi
+if [ ! -f ".env" ]; then
+    echo 'DATABASE_URL="postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5&pool_timeout=5"' > .env
+    echo 'DIRECT_URL="postgresql://ruby:ruby_secret@127.0.0.1:5432/rubypanel?connect_timeout=5&pool_timeout=5"' >> .env
+    echo -e "${GREEN}[OK] .env Datei erstellt${NC}"
 else
     echo -e "${GREEN}[OK] .env Datei vorhanden${NC}"
 fi
@@ -175,11 +179,14 @@ else
 fi
 
 # ─── Prisma ──────────────────────────────────────────────
+echo -e "${YELLOW}[INFO] Prisma Client generieren...${NC}"
+npx prisma generate 2>/dev/null && echo -e "${GREEN}[OK] Prisma Client generiert${NC}" || echo -e "${YELLOW}[WARN] Prisma generate fehlgeschlagen${NC}"
+
 echo -e "${YELLOW}[INFO] Prisma Schema synchronisieren...${NC}"
-npx prisma db push --skip-generate 2>/dev/null && echo -e "${GREEN}[OK] Datenbank Schema aktuell${NC}" || echo -e "${YELLOW}[WARN] Prisma db push fehlgeschlagen${NC}"
+npx prisma db push 2>/dev/null && echo -e "${GREEN}[OK] Datenbank Schema aktuell${NC}" || echo -e "${YELLOW}[WARN] Prisma db push fehlgeschlagen${NC}"
 
 # ─── Seed ────────────────────────────────────────────────
-USER_COUNT=$(node -e "const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.user.count().then(n=>{console.log(n);p.\$disconnect()}).catch(()=>console.log(0))" 2>/dev/null || echo "0")
+USER_COUNT=$(node --input-type=module -e "import {PrismaClient} from '@prisma/client';const p=new PrismaClient();p.user.count().then(n=>{console.log(n);p.\$disconnect()}).catch(()=>{console.log('0');p.\$disconnect()})" 2>/dev/null || echo "0")
 if [ "$USER_COUNT" = "0" ]; then
     echo -e "${YELLOW}[INFO] Admin-User anlegen...${NC}"
     npm run prisma:seed 2>/dev/null && echo -e "${GREEN}[OK] Admin-User erstellt${NC}" || true

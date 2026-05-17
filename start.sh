@@ -23,6 +23,98 @@ if ! command -v node &>/dev/null; then
 fi
 echo -e "${GREEN}[OK] Node.js $(node -v) gefunden${NC}"
 
+# ─── Docker installieren & starten ───────────────────────
+install_docker_linux() {
+    echo -e "${YELLOW}[INFO] Docker wird installiert...${NC}"
+    if command -v apt-get &>/dev/null; then
+        curl -fsSL https://get.docker.com | sudo sh
+    elif command -v yum &>/dev/null; then
+        sudo yum install -y docker
+    elif command -v pacman &>/dev/null; then
+        sudo pacman -Sy --noconfirm docker
+    else
+        curl -fsSL https://get.docker.com | sudo sh
+    fi
+    sudo systemctl enable docker 2>/dev/null || true
+    sudo systemctl start docker 2>/dev/null || true
+    sudo usermod -aG docker "$USER" 2>/dev/null || true
+    echo -e "${GREEN}[OK] Docker installiert${NC}"
+}
+
+start_docker_linux() {
+    if command -v systemctl &>/dev/null; then
+        sudo systemctl start docker 2>/dev/null || true
+    elif command -v service &>/dev/null; then
+        sudo service docker start 2>/dev/null || true
+    fi
+}
+
+# macOS Docker Desktop starten
+start_docker_mac() {
+    if [ -d "/Applications/Docker.app" ]; then
+        echo -e "${YELLOW}[INFO] Docker Desktop wird gestartet...${NC}"
+        open -a Docker
+        echo -e "${YELLOW}[INFO] Warte auf Docker...${NC}"
+        for i in $(seq 1 30); do
+            if docker info &>/dev/null 2>&1; then
+                echo -e "${GREEN}[OK] Docker laeuft${NC}"
+                return 0
+            fi
+            sleep 2
+        done
+        echo -e "${YELLOW}[WARN] Docker startet noch - bitte kurz warten und neu versuchen${NC}"
+    else
+        echo -e "${YELLOW}[INFO] Docker Desktop wird heruntergeladen (macOS)...${NC}"
+        if [[ "$(uname -m)" == "arm64" ]]; then
+            curl -Lo /tmp/Docker.dmg "https://desktop.docker.com/mac/main/arm64/Docker.dmg"
+        else
+            curl -Lo /tmp/Docker.dmg "https://desktop.docker.com/mac/main/amd64/Docker.dmg"
+        fi
+        hdiutil attach /tmp/Docker.dmg -quiet
+        sudo cp -R "/Volumes/Docker/Docker.app" /Applications/
+        hdiutil detach "/Volumes/Docker" -quiet
+        rm /tmp/Docker.dmg
+        open -a Docker
+        echo -e "${YELLOW}[INFO] Warte auf Docker...${NC}"
+        for i in $(seq 1 40); do
+            if docker info &>/dev/null 2>&1; then
+                echo -e "${GREEN}[OK] Docker installiert und laeuft${NC}"
+                return 0
+            fi
+            sleep 3
+        done
+        echo -e "${YELLOW}[WARN] Docker startet noch - bitte warten und dann nochmal starten${NC}"
+    fi
+}
+
+OS="$(uname -s)"
+if ! command -v docker &>/dev/null; then
+    echo -e "${YELLOW}[INFO] Docker nicht gefunden - wird installiert...${NC}"
+    if [ "$OS" = "Darwin" ]; then
+        start_docker_mac
+    else
+        install_docker_linux
+    fi
+else
+    echo -e "${GREEN}[OK] Docker gefunden${NC}"
+    if ! docker info &>/dev/null 2>&1; then
+        echo -e "${YELLOW}[INFO] Docker laeuft nicht - wird gestartet...${NC}"
+        if [ "$OS" = "Darwin" ]; then
+            start_docker_mac
+        else
+            start_docker_linux
+            sleep 3
+            if docker info &>/dev/null 2>&1; then
+                echo -e "${GREEN}[OK] Docker gestartet${NC}"
+            else
+                echo -e "${YELLOW}[WARN] Docker konnte nicht gestartet werden - bitte manuell starten${NC}"
+            fi
+        fi
+    else
+        echo -e "${GREEN}[OK] Docker laeuft${NC}"
+    fi
+fi
+
 # ─── Check / Start PostgreSQL ────────────────────────────
 if command -v pg_isready &>/dev/null; then
     if pg_isready -h 127.0.0.1 -p 5432 -q 2>/dev/null; then
@@ -33,6 +125,8 @@ if command -v pg_isready &>/dev/null; then
             sudo systemctl start postgresql 2>/dev/null || true
         elif command -v service &>/dev/null; then
             sudo service postgresql start 2>/dev/null || true
+        elif [ "$OS" = "Darwin" ]; then
+            brew services start postgresql 2>/dev/null || true
         fi
         sleep 2
         if pg_isready -h 127.0.0.1 -p 5432 -q 2>/dev/null; then
@@ -59,7 +153,7 @@ else
     echo -e "${GREEN}[OK] .env Datei vorhanden${NC}"
 fi
 
-# ─── PostgreSQL User/DB anlegen (Linux/Mac) ──────────────
+# ─── PostgreSQL User/DB anlegen ──────────────────────────
 if command -v psql &>/dev/null && pg_isready -h 127.0.0.1 -p 5432 -q 2>/dev/null; then
     DB_EXISTS=$(PGPASSWORD=ruby_secret psql -U ruby -h 127.0.0.1 -d rubypanel -c "SELECT 1" 2>/dev/null && echo "yes" || echo "no")
     if [ "$DB_EXISTS" = "no" ]; then
@@ -84,7 +178,7 @@ fi
 echo -e "${YELLOW}[INFO] Prisma Schema synchronisieren...${NC}"
 npx prisma db push --skip-generate 2>/dev/null && echo -e "${GREEN}[OK] Datenbank Schema aktuell${NC}" || echo -e "${YELLOW}[WARN] Prisma db push fehlgeschlagen${NC}"
 
-# ─── Seed (nur wenn kein User) ───────────────────────────
+# ─── Seed ────────────────────────────────────────────────
 USER_COUNT=$(node -e "const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.user.count().then(n=>{console.log(n);p.\$disconnect()}).catch(()=>console.log(0))" 2>/dev/null || echo "0")
 if [ "$USER_COUNT" = "0" ]; then
     echo -e "${YELLOW}[INFO] Admin-User anlegen...${NC}"

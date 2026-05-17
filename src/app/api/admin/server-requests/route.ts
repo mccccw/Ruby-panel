@@ -1,4 +1,4 @@
-import { Role } from "@prisma/client";
+import { RequestStatus, Role } from "@prisma/client";
 import { z } from "zod";
 import { fail, guarded, ok } from "@/lib/api";
 import { auditLog } from "@/lib/audit";
@@ -35,7 +35,7 @@ export async function PATCH(request: Request) {
     const body = patchSchema.parse(await request.json());
     const updated = await prisma.serverRequest.update({
       where: { id: requestId },
-      data: { status: body.status as "APPROVED" | "REJECTED", adminNote: body.adminNote ?? null }
+      data: { status: body.status as RequestStatus, adminNote: body.adminNote ?? null }
     });
     await auditLog({ userId: actor.id, action: `server_request.${body.status.toLowerCase()}`, targetType: "ServerRequest", targetId: requestId });
     return ok(updated);

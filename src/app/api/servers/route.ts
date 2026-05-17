@@ -104,13 +104,14 @@ export async function POST(request: Request) {
     try {
       await createServerContainer(server.id);
     } catch (containerError) {
-      const isDockerError =
+      const isInfraError =
         containerError instanceof Error &&
         (containerError.message.includes("ENOENT") ||
           containerError.message.includes("ECONNREFUSED") ||
+          containerError.message.includes("EACCES") ||
           containerError.message.includes("socket") ||
           containerError.message.includes("docker"));
-      if (!isDockerError) {
+      if (!isInfraError) {
         throw containerError;
       }
     }

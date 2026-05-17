@@ -17,6 +17,10 @@ async function ensureAdmin() {
         data: { email: DEFAULT_ADMIN_EMAIL, username: DEFAULT_ADMIN_USERNAME, passwordHash, role: Role.SUPERADMIN, isActive: true }
       });
     }
+    await prisma.server.updateMany({
+      where: { status: { in: ["CREATING", "STARTING", "STOPPING"] } },
+      data: { status: "STOPPED" }
+    });
   } catch {
     // DB unavailable, skip silently
   }

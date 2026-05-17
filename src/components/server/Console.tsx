@@ -27,6 +27,14 @@ export function Console({ serverId, serverPort, serverStatus }: Props) {
   const [powerBusy, setPowerBusy] = useState(false);
   const [status, setStatus] = useState(serverStatus);
   const [copied, setCopied] = useState(false);
+  const [serverIp, setServerIp] = useState("localhost");
+
+  useEffect(() => {
+    fetch("/api/public-ip")
+      .then((r) => r.json() as Promise<{ ok: boolean; data?: { ip: string } }>)
+      .then((payload) => { if (payload.ok && payload.data?.ip) setServerIp(payload.data.ip); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!terminalRef.current) return;
@@ -112,7 +120,7 @@ export function Console({ serverId, serverPort, serverStatus }: Props) {
   }
 
   function copyIp() {
-    const ip = `${window.location.hostname}:${serverPort}`;
+    const ip = `${serverIp}:${serverPort}`;
     void navigator.clipboard.writeText(ip).then(() => {
       setCopied(true);
       toast.success("Server IP copied!");
@@ -138,7 +146,7 @@ export function Console({ serverId, serverPort, serverStatus }: Props) {
             className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-3 py-1.5 text-xs text-white/60 transition-colors hover:bg-white/10 hover:text-white"
           >
             {copied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
-            {window?.location?.hostname ?? "localhost"}:{serverPort}
+            {serverIp}:{serverPort}
           </button>
 
           <Button

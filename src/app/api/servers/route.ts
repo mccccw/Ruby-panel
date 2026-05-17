@@ -4,7 +4,6 @@ import { z } from "zod";
 import { fail, guarded, ok } from "@/lib/api";
 import { auditLog } from "@/lib/audit";
 import { requireUser } from "@/lib/auth";
-import { createServerContainer } from "@/lib/docker";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils";
 
@@ -78,7 +77,7 @@ export async function POST(request: Request) {
         description: input.description ?? null,
         type: input.type,
         version: input.version,
-        status: ServerStatus.CREATING,
+        status: ServerStatus.STOPPED,
         containerName: `ruby-${idSeed}`,
         port,
         ramMb: input.ramMb,
@@ -95,11 +94,6 @@ export async function POST(request: Request) {
         }
       };
     const server = await prisma.server.create({ data });
-    try {
-      await createServerContainer(server.id);
-    } catch {
-      await prisma.server.update({ where: { id: server.id }, data: { status: ServerStatus.STOPPED } });
-    }
     await auditLog({ userId: user.id, action: "server.create", targetType: "Server", targetId: server.id, metadata: { port, type: input.type } });
     return ok({ id: server.id }, { status: 201 });
   } catch (error) {

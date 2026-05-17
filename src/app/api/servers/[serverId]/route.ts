@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 const patchSchema = z.object({
   name: z.string().min(2).max(64).optional(),
   description: z.string().max(280).nullable().optional(),
+  iconUrl: z.string().url().nullable().optional(),
   ramMb: z.number().int().min(512).max(32768).optional(),
   cpuPercent: z.number().min(10).max(800).optional(),
   diskGb: z.number().min(1).max(2048).optional(),
@@ -40,6 +41,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ serve
     const data: Prisma.ServerUpdateInput = {
       ...(input.name !== undefined ? { name: input.name } : {}),
       ...(input.description !== undefined ? { description: input.description } : {}),
+      ...(input.iconUrl !== undefined ? { iconUrl: input.iconUrl } : {}),
       ...(input.ramMb !== undefined ? { ramMb: input.ramMb } : {}),
       ...(input.cpuPercent !== undefined ? { cpuPercent: input.cpuPercent } : {}),
       ...(input.diskGb !== undefined ? { diskGb: input.diskGb } : {}),
